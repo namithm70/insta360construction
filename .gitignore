@@ -1,0 +1,12 @@
+.DS_Store
+.vscode/
+_tmp_ios_sdk/
+iOS_v1.9.2/
+**/build/
+**/.dart_tool/
+**/Pods/
+**/.symlinks/
+**/Frameworks/
+*.xcframework/
+*.framework/
+*.dSYM/

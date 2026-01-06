@@ -1,0 +1,29 @@
+PODS:
+  - Flutter (1.0.0)
+  - insta360_sdk (0.0.1):
+    - Flutter
+  - path_provider_foundation (0.0.1):
+    - Flutter
+    - FlutterMacOS
+
+DEPENDENCIES:
+  - Flutter (from `Flutter`)
+  - insta360_sdk (from `.symlinks/plugins/insta360_sdk/ios`)
+  - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
+
+EXTERNAL SOURCES:
+  Flutter:
+    :path: Flutter
+  insta360_sdk:
+    :path: ".symlinks/plugins/insta360_sdk/ios"
+  path_provider_foundation:
+    :path: ".symlinks/plugins/path_provider_foundation/darwin"
+
+SPEC CHECKSUMS:
+  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  insta360_sdk: e4e2adce1ca55ba56fe09db38eac27269715b197
+  path_provider_foundation: bb55f6dbba17d0dccd6737fe6f7f34fbd0376880
+
+PODFILE CHECKSUM: fdda8adac6383af9f7b75f989785756cf5e9685d
+
+COCOAPODS: 1.16.2

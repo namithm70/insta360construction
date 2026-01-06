@@ -1,0 +1,71 @@
+platform :ios, '13.0'
+
+# CocoaPods analytics sends network stats synchronously affecting flutter build latency.
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+project 'Runner', {
+  'Debug' => :debug,
+  'Profile' => :release,
+  'Release' => :release,
+}
+
+def flutter_root
+  generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
+  unless File.exist?(generated_xcode_build_settings_path)
+    raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure flutter pub get is executed first"
+  end
+
+  File.foreach(generated_xcode_build_settings_path) do |line|
+    matches = line.match(/FLUTTER_ROOT\=(.*)/)
+    return matches[1].strip if matches
+  end
+  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. Try deleting Generated.xcconfig, then run flutter pub get"
+end
+
+require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
+
+flutter_ios_podfile_setup
+
+target 'Runner' do
+  use_frameworks!
+
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  target 'RunnerTests' do
+    inherit! :search_paths
+  end
+end
+
+post_install do |installer|
+  frameworks_to_strip = %w[
+    INSCameraSDK
+    INSCameraServiceSDK
+    INSCoreMedia
+    SSZipArchive
+    SnapKit
+    Eureka
+  ]
+
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+  end
+
+  %w[debug release].each do |config_name|
+    xcconfig_path = installer.sandbox.root + "Target Support Files/Pods-Runner/Pods-Runner.#{config_name}.xcconfig"
+    next unless File.exist?(xcconfig_path)
+    xcconfig = File.read(xcconfig_path)
+    flags_line = xcconfig.lines.find { |line| line.start_with?('OTHER_LDFLAGS =') }
+    next unless flags_line
+    flags_value = flags_line.split('=', 2)[1].to_s.strip
+    frameworks_to_strip.each do |framework|
+      flags_value = flags_value.gsub(/-framework\\s+\"#{framework}\"/, '')
+    end
+    flags_value = flags_value.split.join(' ')
+    override_line = "OTHER_LDFLAGS[sdk=iphonesimulator*] = #{flags_value}"
+    if xcconfig.match?(/^OTHER_LDFLAGS\\[sdk=iphonesimulator\\*\\]/)
+      xcconfig = xcconfig.gsub(/^OTHER_LDFLAGS\\[sdk=iphonesimulator\\*\\].*$/m, override_line)
+    else
+      xcconfig << "#{override_line}\n"
+    end
+    File.write(xcconfig_path, xcconfig)
+  end
+end
