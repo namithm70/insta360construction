@@ -41,7 +41,7 @@ Flutter bindings for Insta360 iOS SDK.
   # Flutter.framework does not contain a i386 slice.
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
-    'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386 x86_64',
+    'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386',
     'FRAMEWORK_SEARCH_PATHS' => '"$(inherited)" "$(PODS_TARGET_SRCROOT)/Frameworks" "$(PODS_XCFRAMEWORKS_BUILD_DIR)/insta360_sdk"',
     'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) TO_B_SDK=1'
   }
