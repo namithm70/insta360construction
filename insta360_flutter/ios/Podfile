@@ -52,6 +52,17 @@ post_install do |installer|
 
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+    next unless pod_targets_to_patch.include?(target.name)
+
+    target.build_configurations.each do |config|
+      flags_value = config.build_settings['OTHER_LDFLAGS']
+      next unless flags_value
+      frameworks_to_strip.each do |framework|
+        flags_value = flags_value.gsub(/-framework\\s+\"#{framework}\"/, '')
+      end
+      flags_value = flags_value.split.join(' ')
+      config.build_settings['OTHER_LDFLAGS[sdk=iphonesimulator*]'] = flags_value
+    end
   end
 
   %w[debug release].each do |config_name|
