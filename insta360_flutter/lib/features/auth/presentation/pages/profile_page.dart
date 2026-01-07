@@ -12,8 +12,6 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  String _role = 'worker';
-
   @override
   Widget build(BuildContext context) {
     return BlocListener<AuthCubit, AuthState>(
@@ -31,9 +29,6 @@ class _ProfilePageState extends State<ProfilePage> {
           final user = state.user;
           if (user == null) {
             return const Center(child: Text('No profile loaded'));
-          }
-          if (_role != user.role) {
-            _role = user.role;
           }
           return ListView(
             padding: const EdgeInsets.all(24),
@@ -89,34 +84,38 @@ class _ProfilePageState extends State<ProfilePage> {
                             ),
                       ),
                       const SizedBox(height: 10),
-                      SegmentedButton<String>(
-                        segments: const [
-                          ButtonSegment(value: 'worker', label: Text('Worker')),
-                          ButtonSegment(value: 'admin', label: Text('Admin')),
-                        ],
-                        selected: {_role},
-                        onSelectionChanged: (value) {
-                          setState(() => _role = value.first);
-                        },
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0C8B7D).withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: const Color(0xFF0C8B7D).withOpacity(0.35),
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
+                          child: Text(
+                            user.role == 'admin' ? 'Admin' : 'Worker',
+                            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF0C8B7D),
+                                ),
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
                       BlocBuilder<AuthCubit, AuthState>(
                         builder: (context, subState) {
-                          final isLoading = subState.status == AuthStatus.loading;
                           return Row(
                             children: [
                               Expanded(
-                                child: FilledButton(
-                                  onPressed: isLoading
-                                      ? null
-                                      : () => context.read<AuthCubit>().updateRole(_role),
-                                  child: Text(isLoading ? 'Updating...' : 'Update role'),
+                                child: OutlinedButton(
+                                  onPressed: () => context.read<AuthCubit>().logout(),
+                                  child: const Text('Log out'),
                                 ),
-                              ),
-                              const SizedBox(width: 12),
-                              OutlinedButton(
-                                onPressed: () => context.read<AuthCubit>().logout(),
-                                child: const Text('Log out'),
                               ),
                             ],
                           );
