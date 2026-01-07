@@ -18,6 +18,7 @@ class Insta360Home extends StatefulWidget {
 
 class _Insta360HomeState extends State<Insta360Home> {
   int _tabIndex = 0;
+  late final PageController _pageController;
   final TextEditingController _wifiChannelController =
       TextEditingController(text: '0');
   final TextEditingController _countryCodeController =
@@ -36,11 +37,13 @@ class _Insta360HomeState extends State<Insta360Home> {
 
   @override
   void initState() {
+    _pageController = PageController(initialPage: _tabIndex);
     super.initState();
   }
 
   @override
   void dispose() {
+    _pageController.dispose();
     _wifiChannelController.dispose();
     _countryCodeController.dispose();
     _wifiSsidController.dispose();
@@ -1044,8 +1047,13 @@ class _Insta360HomeState extends State<Insta360Home> {
                 ),
               ),
               SafeArea(
-                child: IndexedStack(
-                  index: _tabIndex,
+                child: PageView(
+                  controller: _pageController,
+                  onPageChanged: (index) {
+                    setState(() {
+                      _tabIndex = index;
+                    });
+                  },
                   children: [
                     _buildConnectTab(textTheme, state),
                     _buildBluetoothTab(textTheme, state),
@@ -1064,6 +1072,11 @@ class _Insta360HomeState extends State<Insta360Home> {
               setState(() {
                 _tabIndex = index;
               });
+              _pageController.animateToPage(
+                index,
+                duration: const Duration(milliseconds: 280),
+                curve: Curves.easeOutCubic,
+              );
             },
             indicatorColor: const Color(0xFF0C8B7D).withOpacity(0.2),
             destinations: const [
