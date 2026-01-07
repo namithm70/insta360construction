@@ -45,27 +45,37 @@ post_install do |installer|
     Eureka
   ]
 
+  pod_targets_to_patch = %w[
+    Pods-Runner
+    insta360_sdk
+  ]
+
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
   end
 
   %w[debug release].each do |config_name|
-    xcconfig_path = installer.sandbox.root + "Target Support Files/Pods-Runner/Pods-Runner.#{config_name}.xcconfig"
-    next unless File.exist?(xcconfig_path)
-    xcconfig = File.read(xcconfig_path)
-    flags_line = xcconfig.lines.find { |line| line.start_with?('OTHER_LDFLAGS =') }
-    next unless flags_line
-    flags_value = flags_line.split('=', 2)[1].to_s.strip
-    frameworks_to_strip.each do |framework|
-      flags_value = flags_value.gsub(/-framework\\s+\"#{framework}\"/, '')
+    pod_targets_to_patch.each do |target_name|
+      xcconfig_path = File.join(
+        installer.sandbox.root.to_s,
+        "Target Support Files/#{target_name}/#{target_name}.#{config_name}.xcconfig"
+      )
+      next unless File.exist?(xcconfig_path)
+      xcconfig = File.read(xcconfig_path)
+      flags_line = xcconfig.lines.find { |line| line.start_with?('OTHER_LDFLAGS =') }
+      next unless flags_line
+      flags_value = flags_line.split('=', 2)[1].to_s.strip
+      frameworks_to_strip.each do |framework|
+        flags_value = flags_value.gsub(/-framework\\s+\"#{framework}\"/, '')
+      end
+      flags_value = flags_value.split.join(' ')
+      override_line = "OTHER_LDFLAGS[sdk=iphonesimulator*] = #{flags_value}"
+      if xcconfig.match?(/^OTHER_LDFLAGS\\[sdk=iphonesimulator\\*\\]/)
+        xcconfig = xcconfig.gsub(/^OTHER_LDFLAGS\\[sdk=iphonesimulator\\*\\].*$/m, override_line)
+      else
+        xcconfig << "#{override_line}\n"
+      end
+      File.write(xcconfig_path, xcconfig)
     end
-    flags_value = flags_value.split.join(' ')
-    override_line = "OTHER_LDFLAGS[sdk=iphonesimulator*] = #{flags_value}"
-    if xcconfig.match?(/^OTHER_LDFLAGS\\[sdk=iphonesimulator\\*\\]/)
-      xcconfig = xcconfig.gsub(/^OTHER_LDFLAGS\\[sdk=iphonesimulator\\*\\].*$/m, override_line)
-    else
-      xcconfig << "#{override_line}\n"
-    end
-    File.write(xcconfig_path, xcconfig)
   end
 end
