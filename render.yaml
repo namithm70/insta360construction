@@ -2,6 +2,7 @@ services:
   - type: web
     name: insta360-backend
     env: python
+    plan: free
     rootDir: insta360_flutter/backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
