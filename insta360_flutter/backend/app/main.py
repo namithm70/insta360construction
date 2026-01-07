@@ -1,8 +1,9 @@
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import auth, crud, schemas
-from .core.db import client, get_db
+from .api import schemas
+from .services import auth, crud
+from .services.db import client, get_db
 
 app = FastAPI(title="Insta360 Backend", version="1.0.0")
 
