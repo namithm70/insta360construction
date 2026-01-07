@@ -1,6 +1,6 @@
 fastapi==0.115.0
 uvicorn==0.30.6
-sqlalchemy==2.0.34
+pymongo==4.8.0
 passlib[bcrypt]==1.7.4
 bcrypt==3.2.2
 python-jose==3.3.0

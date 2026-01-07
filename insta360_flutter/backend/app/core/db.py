@@ -1,22 +1,10 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from pymongo import MongoClient
 
-DATABASE_URL = "sqlite:///./insta360.db"
+DATABASE_URL = "mongodb://localhost:27017"
+DATABASE_NAME = "insta360"
 
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False},
-)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-class Base(DeclarativeBase):
-    pass
+client = MongoClient(DATABASE_URL)
 
 
 def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    return client[DATABASE_NAME]

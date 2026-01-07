@@ -13,16 +13,8 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class ForgotPasswordRequest(BaseModel):
-    email: EmailStr
-
-
-class RoleUpdateRequest(BaseModel):
-    role: str
-
-
 class UserResponse(BaseModel):
-    id: int
+    id: str
     email: EmailStr
     full_name: str
     role: str
