@@ -42,7 +42,6 @@ Flutter bindings for Insta360 iOS SDK.
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
     'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386',
-    'EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]' => '*.swift',
     'FRAMEWORK_SEARCH_PATHS' => '"$(inherited)" "$(PODS_TARGET_SRCROOT)/Frameworks" "$(PODS_XCFRAMEWORKS_BUILD_DIR)/insta360_sdk"',
     'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) TO_B_SDK=1'
   }
