@@ -1,3 +1,3 @@
 class AppConfig {
-  static const String backendBaseUrl = 'http://localhost:8000';
+  static const String backendBaseUrl = 'https://insta360-backend.onrender.com';
 }
