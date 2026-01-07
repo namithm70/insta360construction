@@ -18,6 +18,7 @@ class _SignupPageState extends State<SignupPage> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   String _role = 'worker';
 
   @override
@@ -25,7 +26,26 @@ class _SignupPageState extends State<SignupPage> {
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  void _attemptSignup(BuildContext context, {required bool isLoading}) {
+    if (isLoading) return;
+    final password = _passwordController.text;
+    final confirmPassword = _confirmPasswordController.text;
+    if (password != confirmPassword) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Passwords do not match')),
+      );
+      return;
+    }
+    context.read<AuthCubit>().signup(
+          email: _emailController.text.trim(),
+          fullName: _nameController.text.trim(),
+          password: password,
+          role: _role,
+        );
   }
 
   @override
@@ -85,6 +105,12 @@ class _SignupPageState extends State<SignupPage> {
                       label: 'Password',
                       hint: 'Create a secure password',
                     ),
+                    const SizedBox(height: 16),
+                    PasswordField(
+                      controller: _confirmPasswordController,
+                      label: 'Confirm password',
+                      hint: 'Re-enter your password',
+                    ),
                     const SizedBox(height: 20),
                     Text(
                       'Role',
@@ -112,14 +138,7 @@ class _SignupPageState extends State<SignupPage> {
                           child: FilledButton(
                             onPressed: isLoading
                                 ? null
-                                : () {
-                                    context.read<AuthCubit>().signup(
-                                          email: _emailController.text.trim(),
-                                          fullName: _nameController.text.trim(),
-                                          password: _passwordController.text,
-                                          role: _role,
-                                        );
-                                  },
+                                : () => _attemptSignup(context, isLoading: isLoading),
                             child: Text(isLoading ? 'Creating account...' : 'Sign up'),
                           ),
                         );
