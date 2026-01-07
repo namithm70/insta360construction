@@ -17,14 +17,18 @@ Flutter bindings for Insta360 iOS SDK.
   s.dependency 'Flutter'
   s.platform = :ios, '13.0'
   frameworks_root = 'Frameworks'
-  s.vendored_frameworks = [
-    "#{frameworks_root}/INSCameraSDK.xcframework",
-    "#{frameworks_root}/INSCameraServiceSDK.xcframework",
-    "#{frameworks_root}/INSCoreMedia.xcframework",
-    "#{frameworks_root}/SSZipArchive.xcframework",
-    "#{frameworks_root}/SnapKit.xcframework",
-    "#{frameworks_root}/Eureka.xcframework"
-  ]
+  if ENV['SIMULATOR_BUILD'] == '1'
+    s.vendored_frameworks = []
+  else
+    s.vendored_frameworks = [
+      "#{frameworks_root}/INSCameraSDK.xcframework",
+      "#{frameworks_root}/INSCameraServiceSDK.xcframework",
+      "#{frameworks_root}/INSCoreMedia.xcframework",
+      "#{frameworks_root}/SSZipArchive.xcframework",
+      "#{frameworks_root}/SnapKit.xcframework",
+      "#{frameworks_root}/Eureka.xcframework"
+    ]
+  end
   s.frameworks = [
     'UIKit',
     'AVFoundation',
