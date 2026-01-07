@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'features/home/presentation/pages/insta360_home_page.dart';
+import 'features/auth/presentation/pages/auth_gate.dart';
 
 class Insta360App extends StatelessWidget {
   const Insta360App({super.key});
@@ -63,7 +63,7 @@ class Insta360App extends StatelessWidget {
           ),
         ),
       ),
-      home: const Insta360Home(),
+      home: const AuthGate(),
     );
   }
 }

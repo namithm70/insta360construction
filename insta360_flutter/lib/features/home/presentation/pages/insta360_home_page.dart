@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:insta360_sdk/insta360_sdk.dart';
 
+import '../../../auth/presentation/pages/profile_page.dart';
 import '../bloc/insta360_bloc.dart';
 import '../bloc/insta360_event.dart';
 import '../bloc/insta360_state.dart';
@@ -1051,6 +1052,7 @@ class _Insta360HomeState extends State<Insta360Home> {
                     _buildWifiTab(textTheme, state),
                     _buildLiveTab(textTheme, state),
                     _buildMediaTab(textTheme, state),
+                    const ProfilePage(),
                   ],
                 ),
               ),
@@ -1089,6 +1091,11 @@ class _Insta360HomeState extends State<Insta360Home> {
                 icon: Icon(Icons.photo_library_outlined),
                 selectedIcon: Icon(Icons.photo_library),
                 label: 'Media',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.person_outline),
+                selectedIcon: Icon(Icons.person),
+                label: 'Profile',
               ),
             ],
           ),

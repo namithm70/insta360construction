@@ -45,6 +45,24 @@ class ApiClient {
     }
   }
 
+  Future<Result<Map<String, dynamic>>> patch(
+    String path, {
+    Map<String, String>? headers,
+    Object? body,
+  }) async {
+    final uri = Uri.parse('$baseUrl$path');
+    try {
+      final response = await _client.patch(
+        uri,
+        headers: _withJson(headers),
+        body: body == null ? null : jsonEncode(body),
+      );
+      return _handleJson(response);
+    } catch (error) {
+      return left(AppException('Network request failed', details: error));
+    }
+  }
+
   Map<String, String> _withJson(Map<String, String>? headers) {
     return {
       'Content-Type': 'application/json',
