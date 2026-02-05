@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../cubit/auth_cubit.dart';
 import '../cubit/auth_state.dart';
+import '../../../../core/config.dart';
 import '../../../home/presentation/pages/insta360_home_page.dart';
 import 'login_page.dart';
 
@@ -13,6 +15,9 @@ class AuthGate extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<AuthCubit, AuthState>(
       builder: (context, state) {
+        if (kDebugMode && AppConfig.debugBypassAuth) {
+          return const Insta360Home();
+        }
         if (state.status == AuthStatus.authenticated) {
           return const Insta360Home();
         }

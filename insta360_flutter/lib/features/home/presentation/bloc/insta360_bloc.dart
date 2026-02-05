@@ -8,13 +8,17 @@ import '../../../../core/error/app_exception.dart';
 import '../../domain/entities/bluetooth_device_info.dart';
 import '../../domain/entities/media_item.dart';
 import '../../domain/entities/wifi_scan_entry.dart';
+import '../../../../core/storage/wifi_credentials_store.dart';
 import '../../domain/repositories/insta360_repository.dart';
 import 'insta360_event.dart';
 import 'insta360_state.dart';
 
 class Insta360Bloc extends Bloc<Insta360UiEvent, Insta360State> {
-  Insta360Bloc({required Insta360Repository repository})
-      : _repository = repository,
+  Insta360Bloc({
+    required Insta360Repository repository,
+    required WifiCredentialsStore wifiStore,
+  })  : _repository = repository,
+        _wifiStore = wifiStore,
         super(Insta360State.initial()) {
     _subscription = _repository.events().listen(
           (event) => add(SdkEventReceived(event)),
@@ -65,19 +69,53 @@ class Insta360Bloc extends Bloc<Insta360UiEvent, Insta360State> {
   }
 
   final Insta360Repository _repository;
+  final WifiCredentialsStore _wifiStore;
   StreamSubscription<sdk.Insta360Event>? _subscription;
+  bool _pendingPreview = false;
+  int _previewRetryCount = 0;
+  Future<bool>? _wifiOpenTask;
+  Future<bool>? _wifiJoinTask;
+  Future<void>? _connectWifiTask;
+  bool _wifiJoined = false;
+  String? _lastWifiSsid;
+  String? _lastWifiPassword;
+  static const String _defaultWifiCountryCode = 'US';
+  bool _isBluetoothConnected = false;
+  bool _connectInProgress = false;
+  int _connectToken = 0;
+  Timer? _connectTimeout;
+  final List<String> _logBuffer = [];
+  Timer? _logFlushTimer;
+  static const Duration _logFlushInterval = Duration(milliseconds: 300);
 
   @override
   Future<void> close() {
     _subscription?.cancel();
+    _connectTimeout?.cancel();
+    _logFlushTimer?.cancel();
     return super.close();
   }
 
   void _appendLog(String message) {
+    _logBuffer.insert(0, '${DateTime.now().toIso8601String()} $message');
+    if (_logBuffer.length >= 40) {
+      _flushLogBuffer();
+      return;
+    }
+    _logFlushTimer ??= Timer(_logFlushInterval, _flushLogBuffer);
+  }
+
+  void _flushLogBuffer() {
+    _logFlushTimer?.cancel();
+    _logFlushTimer = null;
+    if (_logBuffer.isEmpty) {
+      return;
+    }
     final log = List<String>.from(state.eventLog);
-    log.insert(0, '${DateTime.now().toIso8601String()} $message');
+    log.insertAll(0, _logBuffer);
+    _logBuffer.clear();
     if (log.length > 200) {
-      log.removeLast();
+      log.removeRange(200, log.length);
     }
     emit(state.copyWith(eventLog: log));
   }
@@ -119,11 +157,18 @@ class Insta360Bloc extends Bloc<Insta360UiEvent, Insta360State> {
         final identifier = sdkEvent.payload['identifier'] as String?;
         final name = sdkEvent.payload['name'] as String? ?? 'unknown';
         emit(state.copyWith(connectedBluetoothId: identifier));
+        _isBluetoothConnected = true;
         _appendLog('bluetooth_connected: $name ${identifier ?? ''}'.trim());
         return;
       case 'bluetooth_disconnected':
         final identifier = sdkEvent.payload['identifier'] as String?;
         final error = sdkEvent.payload['error'] as String?;
+        _isBluetoothConnected = false;
+        _wifiJoined = false;
+        _lastWifiSsid = null;
+        _lastWifiPassword = null;
+        _pendingPreview = false;
+        _finishConnectWorkflow();
         emit(
           state.copyWith(
             connectedBluetoothId: state.connectedBluetoothId == identifier
@@ -222,6 +267,34 @@ class Insta360Bloc extends Bloc<Insta360UiEvent, Insta360State> {
         final source = sdkEvent.payload['source'];
         final stateName = sdkEvent.payload['stateName'];
         _appendLog('camera_state: $source -> $stateName');
+        if (source == 'socket') {
+          if (stateName == 'connected') {
+            _finishConnectWorkflow();
+            if (_pendingPreview) {
+              _pendingPreview = false;
+              _previewRetryCount = 0;
+              await _logResult('start_preview', _repository.startPreview);
+            }
+          } else if (_pendingPreview && stateName == 'no_connection') {
+            if (_previewRetryCount < 3) {
+              _previewRetryCount += 1;
+              Future<void>(() async {
+                await Future.delayed(const Duration(seconds: 2));
+                if (_pendingPreview) {
+                  await _logResult('connect_wifi_retry', _repository.connectWifi);
+                }
+              });
+            } else {
+              _appendLog('start_preview: failed to connect after retries');
+              _pendingPreview = false;
+              _finishConnectWorkflow();
+            }
+          } else if (stateName == 'connect_failed' || stateName == 'no_connection') {
+            _appendLog('connect_wifi: failed');
+            _pendingPreview = false;
+            _finishConnectWorkflow();
+          }
+        }
         return;
       case 'notification':
         final name = sdkEvent.payload['name'];
@@ -267,6 +340,7 @@ class Insta360Bloc extends Bloc<Insta360UiEvent, Insta360State> {
     DisconnectBluetoothRequested event,
     Emitter<Insta360State> emit,
   ) async {
+    _pendingPreview = false;
     await _logResult('bluetooth_disconnect', _repository.disconnectBluetoothDevice);
   }
 
@@ -289,13 +363,18 @@ class Insta360Bloc extends Bloc<Insta360UiEvent, Insta360State> {
     ConnectDeviceWifiRequested event,
     Emitter<Insta360State> emit,
   ) async {
-    await _logResult('connect_wifi', _repository.connectWifi);
+    await _startConnectWorkflow(startPreview: false);
   }
 
   Future<void> _onDisconnectDeviceWifi(
     DisconnectDeviceWifiRequested event,
     Emitter<Insta360State> emit,
   ) async {
+    _pendingPreview = false;
+    _wifiJoined = false;
+    _lastWifiSsid = null;
+    _lastWifiPassword = null;
+    _finishConnectWorkflow();
     await _logResult('disconnect_wifi', _repository.disconnectWifi);
   }
 
@@ -331,13 +410,14 @@ class Insta360Bloc extends Bloc<Insta360UiEvent, Insta360State> {
     StartPreviewRequested event,
     Emitter<Insta360State> emit,
   ) async {
-    await _logResult('start_preview', _repository.startPreview);
+    await _startConnectWorkflow(startPreview: true);
   }
 
   Future<void> _onStopPreview(
     StopPreviewRequested event,
     Emitter<Insta360State> emit,
   ) async {
+    _pendingPreview = false;
     await _logResult('stop_preview', _repository.stopPreview);
   }
 
@@ -616,4 +696,374 @@ class Insta360Bloc extends Bloc<Insta360UiEvent, Insta360State> {
       (data) => _appendLog('$label: $data'),
     );
   }
+
+  Future<void> _startConnectWorkflow({required bool startPreview}) async {
+    if (_connectInProgress) {
+      _appendLog('connect_workflow: busy');
+      return;
+    }
+    if (!_isBluetoothConnected) {
+      _appendLog('connect_workflow: bluetooth not connected');
+      return;
+    }
+    _connectInProgress = true;
+    emit(state.copyWith(isConnectingWifi: true));
+    final token = ++_connectToken;
+    _connectTimeout?.cancel();
+    _connectTimeout = Timer(const Duration(seconds: 20), () {
+      if (_isActiveToken(token) && _connectInProgress) {
+        _appendLog('connect_workflow: timeout');
+        _pendingPreview = false;
+        _finishConnectWorkflow();
+      }
+    });
+
+    if (startPreview) {
+      _pendingPreview = true;
+      _previewRetryCount = 0;
+    }
+
+    if (state.isScanning) {
+      await _logResult('bluetooth_stop_scan', _repository.stopBluetoothScan);
+    }
+
+    final opened = await _openWifiWithRetry(channel: 0);
+    if (!_isActiveToken(token) || !opened) {
+      _finishConnectWorkflow(clearPendingPreview: true);
+      return;
+    }
+
+    final joined = await _attemptJoinCameraWifi();
+    if (!_isActiveToken(token) || !joined) {
+      _finishConnectWorkflow(clearPendingPreview: true);
+      return;
+    }
+
+    await Future.delayed(const Duration(seconds: 2));
+    if (!_isActiveToken(token)) {
+      _finishConnectWorkflow(clearPendingPreview: true);
+      return;
+    }
+
+    await _connectWifiOnce();
+  }
+
+  bool _isActiveToken(int token) => _connectToken == token;
+
+  void _finishConnectWorkflow({bool clearPendingPreview = false}) {
+    if (!_connectInProgress && !state.isConnectingWifi) {
+      return;
+    }
+    _connectTimeout?.cancel();
+    _connectTimeout = null;
+    _connectInProgress = false;
+    if (clearPendingPreview) {
+      _pendingPreview = false;
+    }
+    emit(state.copyWith(isConnectingWifi: false));
+  }
+
+  Future<bool> _attemptJoinCameraWifi() async {
+    if (_wifiJoined) {
+      _appendLog('wifi_join: already joined');
+      return true;
+    }
+    final inFlight = _wifiJoinTask;
+    if (inFlight != null) {
+      _appendLog('wifi_join: awaiting in-flight');
+      return await inFlight;
+    }
+    final task = _attemptJoinCameraWifiInternal();
+    _wifiJoinTask = task;
+    try {
+      return await task;
+    } finally {
+      _wifiJoinTask = null;
+    }
+  }
+
+  Future<bool> _attemptJoinCameraWifiInternal() async {
+    _WifiInfoSnapshot? info;
+    if (_isBluetoothConnected) {
+      info = await _fetchWifiInfoWithRetry();
+      if (info != null) {
+        await _cacheWifiCredentials(info.ssid, info.password);
+      }
+    } else {
+      _appendLog('wifi_join: bluetooth not connected');
+    }
+
+    _WifiInfoSnapshot? source = info;
+    if (source == null) {
+      source = await _loadCachedWifiCredentials();
+      if (source != null) {
+        _appendLog('wifi_join: using cached ssid ${source.ssid}');
+      }
+    }
+
+    String? ssid = source?.ssid ?? _lastWifiSsid;
+    String password = source?.password ?? _lastWifiPassword ?? '';
+    if (ssid == null || ssid.trim().isEmpty) {
+      _appendLog('wifi_join: missing ssid');
+      return false;
+    }
+    _lastWifiSsid = ssid.trim();
+    _lastWifiPassword = password;
+    final joinResult = await _repository.joinCameraWifi(
+      ssid: ssid.trim(),
+      password: password,
+      joinOnce: false,
+    );
+    var ok = false;
+    joinResult.fold(
+      (error) => _appendLog('wifi_join: ${error.message}'),
+      (_) => ok = true,
+    );
+    if (ok) {
+      _wifiJoined = true;
+      _appendLog('wifi_join: ok');
+    }
+    return ok;
+  }
+
+  Future<_WifiInfoSnapshot?> _fetchWifiInfoWithRetry() async {
+    const maxAttempts = 3;
+    for (var attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      if (!_isBluetoothConnected) {
+        _appendLog('wifi_info: bluetooth not connected');
+        return null;
+      }
+      final infoResult = await _repository.getWifiInfo();
+      _WifiInfoSnapshot? snapshot;
+      infoResult.fold(
+        (error) => _appendLog('wifi_info: ${error.message}'),
+        (data) {
+          final ssid = data['ssid']?.toString() ?? '';
+          final password = data['password']?.toString() ?? '';
+          final state = data['state'] as int? ?? 0;
+          final isBusy = data['isBusy'] == true;
+          _appendLog('wifi_info: state=$state busy=$isBusy ssid=$ssid');
+          if (ssid.isNotEmpty) {
+            snapshot = _WifiInfoSnapshot(ssid: ssid, password: password);
+          }
+        },
+      );
+      if (snapshot != null) {
+        return snapshot;
+      }
+      await Future.delayed(const Duration(milliseconds: 800));
+    }
+    return null;
+  }
+
+  Future<void> _cacheWifiCredentials(String ssid, String password) async {
+    try {
+      await _wifiStore.save(ssid: ssid, password: password);
+    } catch (error) {
+      _appendLog('wifi_cache: save failed ($error)');
+    }
+  }
+
+  Future<_WifiInfoSnapshot?> _loadCachedWifiCredentials() async {
+    try {
+      final cached = await _wifiStore.read();
+      if (cached == null) {
+        _appendLog('wifi_cache: empty');
+        return null;
+      }
+      return _WifiInfoSnapshot(ssid: cached.ssid, password: cached.password);
+    } catch (error) {
+      _appendLog('wifi_cache: read failed ($error)');
+      return null;
+    }
+  }
+
+  Future<void> _connectWifiOnce() async {
+    final inFlight = _connectWifiTask;
+    if (inFlight != null) {
+      _appendLog('connect_wifi: awaiting in-flight');
+      return await inFlight;
+    }
+    final task = _logResult('connect_wifi', _repository.connectWifi);
+    _connectWifiTask = task;
+    try {
+      await task;
+    } finally {
+      _connectWifiTask = null;
+    }
+  }
+
+  Future<bool> _openWifiWithRetry({required int channel}) async {
+    final inFlight = _wifiOpenTask;
+    if (inFlight != null) {
+      _appendLog('wifi_open: awaiting in-flight');
+      return await inFlight;
+    }
+    final task = _openWifiWithRetryInternal(channel: channel);
+    _wifiOpenTask = task;
+    try {
+      return await task;
+    } finally {
+      _wifiOpenTask = null;
+    }
+  }
+
+  Future<bool> _openWifiWithRetryInternal({required int channel}) async {
+    if (!_isBluetoothConnected) {
+      _appendLog('wifi_open: bluetooth not connected');
+      return false;
+    }
+    const maxAttempts = 3;
+    var channelToUse = channel;
+    var triedFallbackChannel = false;
+
+    for (var attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      if (attempt > 1) {
+        await Future.delayed(const Duration(seconds: 2));
+      }
+      final result = await _repository.openWifi(channel: channelToUse);
+      if (result.isRight()) {
+        _appendLog('wifi_open: ok');
+        return true;
+      }
+      var message = '';
+      result.fold(
+        (error) {
+          message = error.message.toLowerCase();
+          _appendLog('wifi_open: ${error.message}');
+        },
+        (_) {},
+      );
+      if (_isWifiOpenAlready(message)) {
+        _appendLog('wifi_open: already open');
+        return true;
+      }
+      if (message.contains('error 444')) {
+        _appendLog('wifi_open: camera busy, retrying');
+        continue;
+      }
+
+      final wifiState = await _checkWifiState();
+      if (wifiState == _WifiOpenState.open) {
+        _appendLog('wifi_open: confirmed open via wifi_info');
+        return true;
+      }
+      if (wifiState == _WifiOpenState.busy) {
+        _appendLog('wifi_open: wifi busy, waiting');
+        continue;
+      }
+
+      if (!triedFallbackChannel && channelToUse == 0) {
+        final fallback = await _pickFallbackChannel();
+        if (fallback != null && fallback > 0) {
+          triedFallbackChannel = true;
+          channelToUse = fallback;
+          _appendLog('wifi_open: retry with channel $channelToUse');
+          continue;
+        }
+      }
+
+      if (message.contains('timeout') || message.contains('bluetooth_not_connected')) {
+        await _logResult('wifi_reset', () => _repository.resetWifi(channel: channelToUse));
+        continue;
+      }
+      return false;
+    }
+    return false;
+  }
+
+  Future<_WifiOpenState> _checkWifiState() async {
+    final infoResult = await _repository.getWifiInfo();
+    var state = _WifiOpenState.unknown;
+    infoResult.fold(
+      (error) => _appendLog('wifi_info: ${error.message}'),
+      (data) {
+        final rawState = data['state'] as int? ?? 0;
+        final isBusy = data['isBusy'] == true;
+        _appendLog('wifi_info: state=$rawState busy=$isBusy');
+        if (isBusy) {
+          state = _WifiOpenState.busy;
+          return;
+        }
+        if (rawState == 1 || rawState == 2) {
+          state = _WifiOpenState.open;
+        } else if (rawState == 3) {
+          state = _WifiOpenState.closed;
+        }
+      },
+    );
+    return state;
+  }
+
+  Future<int?> _pickFallbackChannel() async {
+    if (!_isBluetoothConnected) {
+      _appendLog('wifi_channel_list: bluetooth not connected');
+      return null;
+    }
+    final listResult = await _repository.getWifiChannelList();
+    int? selected;
+    listResult.fold(
+      (error) => _appendLog('wifi_channel_list: ${error.message}'),
+      (data) {
+        final list24Raw = data['channelList24g'] as List<dynamic>? ?? const [];
+        final list5Raw = data['channelList5g'] as List<dynamic>? ?? const [];
+        final list24 = list24Raw.map((value) => (value as num).toInt()).toList();
+        final list5 = list5Raw.map((value) => (value as num).toInt()).toList();
+        if (list24.isNotEmpty) {
+          selected = list24.first;
+          return;
+        }
+        if (list5.isNotEmpty) {
+          selected = list5.first;
+          return;
+        }
+      },
+    );
+    if (selected == null) {
+      await _logResult(
+        'wifi_country_code',
+        () => _repository.setWifiCountryCode(_defaultWifiCountryCode),
+      );
+      final retryResult = await _repository.getWifiChannelList();
+      retryResult.fold(
+        (error) => _appendLog('wifi_channel_list: ${error.message}'),
+        (data) {
+          final list24Raw = data['channelList24g'] as List<dynamic>? ?? const [];
+          final list5Raw = data['channelList5g'] as List<dynamic>? ?? const [];
+          final list24 =
+              list24Raw.map((value) => (value as num).toInt()).toList();
+          final list5 =
+              list5Raw.map((value) => (value as num).toInt()).toList();
+          if (list24.isNotEmpty) {
+            selected = list24.first;
+            return;
+          }
+          if (list5.isNotEmpty) {
+            selected = list5.first;
+          }
+        },
+      );
+    }
+    return selected;
+  }
+
+  bool _isWifiOpenAlready(String message) {
+    return message.contains('already') ||
+        message.contains('opened') ||
+        message.contains('open') && message.contains('busy');
+  }
+}
+
+enum _WifiOpenState {
+  unknown,
+  busy,
+  open,
+  closed,
+}
+
+class _WifiInfoSnapshot {
+  const _WifiInfoSnapshot({required this.ssid, required this.password});
+
+  final String ssid;
+  final String password;
 }

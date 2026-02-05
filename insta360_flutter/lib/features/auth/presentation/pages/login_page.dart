@@ -20,6 +20,10 @@ class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
+  void _quickLogin(BuildContext context) {
+    context.read<AuthCubit>().loginWithTestAccount();
+  }
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -111,6 +115,14 @@ class _LoginPageState extends State<LoginPage> {
                               ),
                             );
                           },
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton(
+                            onPressed: () => _quickLogin(context),
+                            child: const Text('Test Login (skip account)'),
+                          ),
                         ),
                       ],
                     ),

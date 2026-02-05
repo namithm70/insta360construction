@@ -13,6 +13,7 @@ class Insta360State extends Equatable {
     required this.wifiScanList,
     required this.connectedBluetoothId,
     required this.isScanning,
+    required this.isConnectingWifi,
     required this.wifiProvisioningEnabled,
     required this.wifiConnectionStatus,
     required this.isLoadingMedia,
@@ -31,6 +32,7 @@ class Insta360State extends Equatable {
   final List<WifiScanEntry> wifiScanList;
   final String? connectedBluetoothId;
   final bool isScanning;
+  final bool isConnectingWifi;
   final bool wifiProvisioningEnabled;
   final String? wifiConnectionStatus;
   final bool isLoadingMedia;
@@ -50,6 +52,7 @@ class Insta360State extends Equatable {
       wifiScanList: const [],
       connectedBluetoothId: null,
       isScanning: false,
+      isConnectingWifi: false,
       wifiProvisioningEnabled: false,
       wifiConnectionStatus: null,
       isLoadingMedia: false,
@@ -70,6 +73,7 @@ class Insta360State extends Equatable {
     List<WifiScanEntry>? wifiScanList,
     String? connectedBluetoothId,
     bool? isScanning,
+    bool? isConnectingWifi,
     bool? wifiProvisioningEnabled,
     String? wifiConnectionStatus,
     bool? isLoadingMedia,
@@ -88,6 +92,7 @@ class Insta360State extends Equatable {
       wifiScanList: wifiScanList ?? this.wifiScanList,
       connectedBluetoothId: connectedBluetoothId ?? this.connectedBluetoothId,
       isScanning: isScanning ?? this.isScanning,
+      isConnectingWifi: isConnectingWifi ?? this.isConnectingWifi,
       wifiProvisioningEnabled:
           wifiProvisioningEnabled ?? this.wifiProvisioningEnabled,
       wifiConnectionStatus: wifiConnectionStatus ?? this.wifiConnectionStatus,
@@ -110,6 +115,7 @@ class Insta360State extends Equatable {
         wifiScanList,
         connectedBluetoothId,
         isScanning,
+        isConnectingWifi,
         wifiProvisioningEnabled,
         wifiConnectionStatus,
         isLoadingMedia,

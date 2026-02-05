@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'app.dart';
 import 'core/config.dart';
 import 'core/network/api_client.dart';
+import 'core/storage/wifi_credentials_store.dart';
 import 'features/auth/data/auth_repository_impl.dart';
 import 'features/auth/presentation/cubit/auth_cubit.dart';
 import 'features/home/data/datasources/insta360_sdk_data_source.dart';
@@ -16,12 +17,16 @@ void main() {
   final repository = Insta360RepositoryImpl(
     dataSource: Insta360SdkDataSource(),
   );
+  final wifiStore = WifiCredentialsStore();
 
   runApp(
     MultiBlocProvider(
       providers: [
         BlocProvider(
-          create: (_) => Insta360Bloc(repository: repository),
+          create: (_) => Insta360Bloc(
+            repository: repository,
+            wifiStore: wifiStore,
+          ),
         ),
         BlocProvider(
           create: (_) => AuthCubit(repository: authRepository),

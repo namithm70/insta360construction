@@ -24,14 +24,22 @@ android {
         applicationId = "com.example.insta360_flutter"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = 29
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    packaging {
+        resources {
+            pickFirsts += listOf("lib/arm64-v8a/libc++_shared.so")
+        }
+    }
+
     buildTypes {
         release {
+            isMinifyEnabled = false
+            isShrinkResources = false
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")

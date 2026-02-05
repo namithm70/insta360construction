@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import NetworkExtension
 
 public class Insta360SdkPlugin: NSObject, FlutterPlugin {
   private let cameraController = Insta360CameraController.shared
@@ -172,6 +173,34 @@ public class Insta360SdkPlugin: NSObject, FlutterPlugin {
         } else {
           result(nil)
         }
+      }
+    case "joinCameraWifi":
+      guard let args = call.arguments as? [String: Any],
+            let ssid = args["ssid"] as? String else {
+        result(FlutterError(code: "invalid_arguments", message: "Missing ssid", details: nil))
+        return
+      }
+      let password = args["password"] as? String ?? ""
+      let joinOnce = args["joinOnce"] as? Bool ?? true
+      let configuration: NEHotspotConfiguration
+      if password.isEmpty {
+        configuration = NEHotspotConfiguration(ssid: ssid)
+      } else {
+        configuration = NEHotspotConfiguration(ssid: ssid, passphrase: password, isWEP: false)
+      }
+      configuration.joinOnce = joinOnce
+      NEHotspotConfigurationManager.shared.apply(configuration) { error in
+        if let error {
+          let nsError = error as NSError
+          if nsError.domain == NEHotspotConfigurationErrorDomain &&
+              nsError.code == NEHotspotConfigurationError.alreadyAssociated.rawValue {
+            result(nil)
+            return
+          }
+          result(FlutterError(code: "wifi_join_failed", message: nsError.localizedDescription, details: nsError.code))
+          return
+        }
+        result(nil)
       }
     case "getConnectedWifiList":
       cameraController.getConnectedWifiList { resultValue in

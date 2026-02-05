@@ -41,6 +41,8 @@
 	<string>Uses Bluetooth to control the camera.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Camera access is required to connect to and control Insta360 cameras.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Local network access is required to connect to Insta360 cameras over Wi-Fi.</string>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

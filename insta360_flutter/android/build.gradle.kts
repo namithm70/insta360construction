@@ -2,6 +2,14 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        maven {
+            url = uri("https://androidsdk.insta360.com/repository/maven-public/")
+            isAllowInsecureProtocol = true
+            credentials {
+                username = "insta360guest"
+                password = "EXMSjSo8OeOrjU7d"
+            }
+        }
     }
 }
 

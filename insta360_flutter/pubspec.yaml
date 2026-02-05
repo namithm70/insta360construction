@@ -35,6 +35,7 @@ dependencies:
   dartz: ^0.10.1
   http: ^1.2.2
   google_fonts: ^6.2.1
+  shared_preferences: ^2.3.2
   insta360_sdk:
     path: packages/insta360_sdk
 

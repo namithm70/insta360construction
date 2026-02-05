@@ -119,6 +119,18 @@ class Insta360Sdk {
     );
   }
 
+  Future<void> joinCameraWifi({
+    required String ssid,
+    required String password,
+    bool joinOnce = true,
+  }) {
+    return Insta360SdkPlatform.instance.joinCameraWifi(
+      ssid: ssid,
+      password: password,
+      joinOnce: joinOnce,
+    );
+  }
+
   Future<Map<String, Object?>> getConnectedWifiList() {
     return Insta360SdkPlatform.instance.getConnectedWifiList();
   }
@@ -216,13 +228,18 @@ class Insta360Preview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!Platform.isIOS) {
-      return const Center(
-        child: Text('Insta360 preview is only supported on iOS.'),
+    if (Platform.isIOS) {
+      return const UiKitView(
+        viewType: 'insta360_sdk/preview',
       );
     }
-    return const UiKitView(
-      viewType: 'insta360_sdk/preview',
+    if (Platform.isAndroid) {
+      return const AndroidView(
+        viewType: 'insta360_sdk/preview',
+      );
+    }
+    return const Center(
+      child: Text('Insta360 preview is only supported on iOS/Android.'),
     );
   }
 }

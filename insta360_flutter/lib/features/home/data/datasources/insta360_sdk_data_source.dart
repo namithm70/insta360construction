@@ -47,6 +47,12 @@ class Insta360SdkDataSource {
     String? bssid,
   }) =>
       _sdk.connectToWifi(ssid: ssid, password: password, bssid: bssid);
+  Future<void> joinCameraWifi({
+    required String ssid,
+    required String password,
+    bool joinOnce = true,
+  }) =>
+      _sdk.joinCameraWifi(ssid: ssid, password: password, joinOnce: joinOnce);
   Future<Map<String, Object?>> getConnectedWifiList() => _sdk.getConnectedWifiList();
 
   Future<Map<String, Object?>> listMedia({required int start, required int limit}) =>

@@ -10,3 +10,5 @@ iOS_v1.9.2/
 *.xcframework/
 *.framework/
 *.dSYM/
+Android-SDK-V1.9.4.zip
+sdk_demo_1.9.4/insta_sdk_demo_release_1.9.4.apk

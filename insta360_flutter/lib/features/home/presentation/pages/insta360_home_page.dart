@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:insta360_sdk/insta360_sdk.dart';
 
@@ -38,6 +39,12 @@ class _Insta360HomeState extends State<Insta360Home> {
   @override
   void initState() {
     _pageController = PageController(initialPage: _tabIndex);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      context.read<Insta360Bloc>().add(InitializeRequested());
+    });
     super.initState();
   }
 
@@ -58,6 +65,26 @@ class _Insta360HomeState extends State<Insta360Home> {
 
   void _logClient(String message) {
     context.read<Insta360Bloc>().add(ClientLogRequested(message));
+  }
+
+  Future<void> _copyActivityLog(List<String> entries) async {
+    if (entries.isEmpty) {
+      _logClient('activity_log: empty');
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Activity log is empty')),
+      );
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: entries.join('\n')));
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Activity log copied')),
+    );
   }
 
   int _parseChannel() {
@@ -794,7 +821,7 @@ class _Insta360HomeState extends State<Insta360Home> {
     );
   }
 
-  Widget _buildPreviewSection() {
+  Widget _buildPreviewSection(Insta360State state) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: SectionCard(
@@ -815,15 +842,22 @@ class _Insta360HomeState extends State<Insta360Home> {
                 ),
               ),
             ),
+            const SizedBox(height: 8),
+            Text(
+              'Preview requires the iPhone to be connected to the camera Wi-Fi.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
                 FilledButton(
-                  onPressed: () => context
-                      .read<Insta360Bloc>()
-                      .add(StartPreviewRequested()),
+                  onPressed: state.isConnectingWifi
+                      ? null
+                      : () => context
+                          .read<Insta360Bloc>()
+                          .add(StartPreviewRequested()),
                   child: const Text('Start Preview'),
                 ),
                 FilledButton.tonal(
@@ -840,13 +874,20 @@ class _Insta360HomeState extends State<Insta360Home> {
                 ),
               ],
             ),
+            if (state.isConnectingWifi) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Connecting to camera Wi-Fi…',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildConnectionControls(TextTheme textTheme) {
+  Widget _buildConnectionControls(TextTheme textTheme, Insta360State state) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: SectionCard(
@@ -864,10 +905,12 @@ class _Insta360HomeState extends State<Insta360Home> {
                   child: const Text('Initialize SDK'),
                 ),
                 FilledButton.tonal(
-                  onPressed: () =>
-                      context
-                          .read<Insta360Bloc>()
-                          .add(ConnectDeviceWifiRequested()),
+                  onPressed: state.isConnectingWifi
+                      ? null
+                      : () =>
+                          context
+                              .read<Insta360Bloc>()
+                              .add(ConnectDeviceWifiRequested()),
                   child: const Text('Connect Wi-Fi'),
                 ),
                 OutlinedButton(
@@ -974,27 +1017,41 @@ class _Insta360HomeState extends State<Insta360Home> {
           '${state.eventLog.length} events',
           style: textTheme.bodySmall,
         ),
-        child: SizedBox(
-          height: 200,
-          child: state.eventLog.isEmpty
-              ? Center(
-                  child: Text(
-                    'No events yet.',
-                    style: textTheme.bodyMedium,
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: state.eventLog.length,
-                  itemBuilder: (context, index) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Text(
-                        state.eventLog[index],
-                        style: textTheme.bodySmall,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onLongPress: () => _copyActivityLog(state.eventLog),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                height: 200,
+                child: state.eventLog.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No events yet.',
+                          style: textTheme.bodyMedium,
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: state.eventLog.length,
+                        itemBuilder: (context, index) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Text(
+                              state.eventLog[index],
+                              style: textTheme.bodySmall,
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Long-press to copy the log.',
+                style: textTheme.bodySmall?.copyWith(color: Colors.black54),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1128,7 +1185,7 @@ class _Insta360HomeState extends State<Insta360Home> {
             subtitle: 'Pair devices, provision Wi-Fi, and manage sessions.',
           ),
         ),
-        SliverToBoxAdapter(child: _buildConnectionControls(textTheme)),
+        SliverToBoxAdapter(child: _buildConnectionControls(textTheme, state)),
         const SliverToBoxAdapter(child: SizedBox(height: 32)),
       ],
     );
@@ -1183,7 +1240,7 @@ class _Insta360HomeState extends State<Insta360Home> {
             subtitle: 'Preview, capture, and control playback quickly.',
           ),
         ),
-        SliverToBoxAdapter(child: _buildPreviewSection()),
+        SliverToBoxAdapter(child: _buildPreviewSection(state)),
         SliverToBoxAdapter(child: _buildCaptureControls(textTheme)),
         const SliverToBoxAdapter(child: SizedBox(height: 32)),
       ],

@@ -78,7 +78,7 @@ class ApiClient {
       }
       return left(
         AppException(
-          data['message']?.toString() ?? 'Request failed',
+          _extractErrorMessage(data) ?? 'Request failed',
           statusCode: response.statusCode,
           details: data,
         ),
@@ -89,5 +89,23 @@ class ApiClient {
             statusCode: response.statusCode, details: error),
       );
     }
+  }
+
+  String? _extractErrorMessage(Map<String, dynamic> data) {
+    final message = data['message']?.toString();
+    if (message != null && message.isNotEmpty) {
+      return message;
+    }
+    final detail = data['detail'];
+    if (detail is String && detail.isNotEmpty) {
+      return detail;
+    }
+    if (detail is Map) {
+      final inner = detail['message']?.toString();
+      if (inner != null && inner.isNotEmpty) {
+        return inner;
+      }
+    }
+    return null;
   }
 }

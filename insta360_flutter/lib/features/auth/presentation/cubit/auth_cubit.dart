@@ -25,6 +25,22 @@ class AuthCubit extends Cubit<AuthState> {
     );
   }
 
+  void loginWithTestAccount() {
+    emit(
+      state.copyWith(
+        status: AuthStatus.authenticated,
+        user: const AuthUser(
+          id: 'test-user',
+          email: 'test@local',
+          fullName: 'Test User',
+          role: 'admin',
+        ),
+        token: 'test-token',
+        message: null,
+      ),
+    );
+  }
+
   Future<void> signup({
     required String email,
     required String fullName,

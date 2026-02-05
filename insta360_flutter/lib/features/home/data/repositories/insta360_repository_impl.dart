@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:dartz/dartz.dart';
 import 'package:insta360_sdk/insta360_sdk.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../core/error/app_exception.dart';
 import '../../../../core/error/result.dart';
@@ -114,6 +115,19 @@ class Insta360RepositoryImpl implements Insta360Repository {
   }) => _guard(() => _dataSource.connectToWifi(ssid: ssid, password: password, bssid: bssid));
 
   @override
+  Future<Result<void>> joinCameraWifi({
+    required String ssid,
+    required String password,
+    bool joinOnce = true,
+  }) => _guard(
+        () => _dataSource.joinCameraWifi(
+          ssid: ssid,
+          password: password,
+          joinOnce: joinOnce,
+        ),
+      );
+
+  @override
   Future<Result<Map<String, Object?>>> getConnectedWifiList() =>
       _guard(() => _dataSource.getConnectedWifiList());
 
@@ -194,6 +208,21 @@ class Insta360RepositoryImpl implements Insta360Repository {
       final data = await action();
       return right(data);
     } catch (error) {
+      if (error is PlatformException) {
+        final parts = <String>[];
+        if (error.code.isNotEmpty) {
+          parts.add('code=${error.code}');
+        }
+        final message = error.message?.trim();
+        if (message != null && message.isNotEmpty) {
+          parts.add(message);
+        }
+        if (error.details != null) {
+          parts.add(error.details.toString());
+        }
+        final detail = parts.isEmpty ? 'SDK operation failed' : parts.join(' | ');
+        return left(AppException(detail, details: error));
+      }
       return left(AppException('SDK operation failed', details: error));
     }
   }

@@ -44,6 +44,11 @@ abstract class Insta360Repository {
     required String password,
     String? bssid,
   });
+  Future<Result<void>> joinCameraWifi({
+    required String ssid,
+    required String password,
+    bool joinOnce = true,
+  });
   Future<Result<Map<String, Object?>>> getConnectedWifiList();
 
   Future<Result<List<MediaItem>>> listPhotos({required int start, required int limit});

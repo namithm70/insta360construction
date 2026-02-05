@@ -38,7 +38,8 @@ Flutter bindings for Insta360 iOS SDK.
     'CoreMedia',
     'CoreVideo',
     'CoreGraphics',
-    'GLKit'
+    'GLKit',
+    'NetworkExtension'
   ]
   s.libraries = 'c++'
 

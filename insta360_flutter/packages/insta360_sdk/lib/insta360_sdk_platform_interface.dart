@@ -113,6 +113,14 @@ abstract class Insta360SdkPlatform extends PlatformInterface {
     throw UnimplementedError('connectToWifi() has not been implemented.');
   }
 
+  Future<void> joinCameraWifi({
+    required String ssid,
+    required String password,
+    bool joinOnce = true,
+  }) {
+    throw UnimplementedError('joinCameraWifi() has not been implemented.');
+  }
+
   Future<Map<String, Object?>> getConnectedWifiList() {
     throw UnimplementedError('getConnectedWifiList() has not been implemented.');
   }

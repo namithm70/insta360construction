@@ -160,6 +160,22 @@ class MethodChannelInsta360Sdk extends Insta360SdkPlatform {
   }
 
   @override
+  Future<void> joinCameraWifi({
+    required String ssid,
+    required String password,
+    bool joinOnce = true,
+  }) async {
+    await methodChannel.invokeMethod<void>(
+      'joinCameraWifi',
+      <String, Object?>{
+        'ssid': ssid,
+        'password': password,
+        'joinOnce': joinOnce,
+      },
+    );
+  }
+
+  @override
   Future<Map<String, Object?>> getConnectedWifiList() async {
     final result = await methodChannel.invokeMapMethod<String, Object?>(
       'getConnectedWifiList',

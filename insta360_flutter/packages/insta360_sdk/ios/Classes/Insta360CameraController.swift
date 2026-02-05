@@ -159,6 +159,7 @@ final class Insta360CameraController: NSObject, INSBluetoothManagerDelegate, INS
   private weak var previewContainer: UIView?
   private var isPreviewPlugged = false
   private var isSessionRunning = false
+  private var heartbeatTimer: DispatchSourceTimer?
 
   private var videoExporter: INSExportSimplify?
   private var imageExporter: INSExportImageSimplify?
@@ -184,11 +185,13 @@ final class Insta360CameraController: NSObject, INSBluetoothManagerDelegate, INS
   }
 
   func connectWifi() {
+    INSCameraManager.socket().autoReconnect = true
     INSCameraManager.socket().setup()
   }
 
   func disconnectWifi() {
     INSCameraManager.socket().shutdown()
+    stopHeartbeats()
   }
 
   func connectUsb() {
@@ -197,6 +200,7 @@ final class Insta360CameraController: NSObject, INSBluetoothManagerDelegate, INS
 
   func disconnectUsb() {
     INSCameraManager.usb().shutdown()
+    stopHeartbeats()
   }
 
   func connectExternal() {
@@ -205,6 +209,7 @@ final class Insta360CameraController: NSObject, INSBluetoothManagerDelegate, INS
 
   func disconnectExternal() {
     INSCameraManager.external().shutdown()
+    stopHeartbeats()
   }
 
   func startBluetoothScan() -> String? {
@@ -220,10 +225,11 @@ final class Insta360CameraController: NSObject, INSBluetoothManagerDelegate, INS
       let identifier = device.identifierUUIDStringSafe
       if self.bluetoothDevicesById[identifier] == nil {
         self.bluetoothDevicesById[identifier] = device
+        let name = device.name.isEmpty ? "unknown" : device.name
         self.emitEvent([
           "type": "bluetooth_device_found",
           "identifier": identifier,
-          "name": device.name ?? "unknown",
+          "name": name,
           "rssi": rssi.intValue
         ])
       }
@@ -261,10 +267,11 @@ final class Insta360CameraController: NSObject, INSBluetoothManagerDelegate, INS
         completion(error.localizedDescription)
       } else {
         self.connectedBluetoothDevice = device
+        let name = device.name.isEmpty ? "unknown" : device.name
         self.emitEvent([
           "type": "bluetooth_connected",
           "identifier": identifier,
-          "name": device.name ?? "unknown"
+          "name": name
         ])
         completion(nil)
       }
@@ -282,7 +289,8 @@ final class Insta360CameraController: NSObject, INSBluetoothManagerDelegate, INS
       completion("bluetooth_not_connected")
       return
     }
-    commandManager.openCameraWifi(with: nil, channel: channel) { error in
+    let options = makeWifiRequestOptions()
+    commandManager.openCameraWifi(with: options, channel: channel) { error in
       completion(error?.localizedDescription)
     }
   }
@@ -292,7 +300,8 @@ final class Insta360CameraController: NSObject, INSBluetoothManagerDelegate, INS
       completion("bluetooth_not_connected")
       return
     }
-    commandManager.closeCameraWifi(with: nil) { error in
+    let options = makeWifiRequestOptions()
+    commandManager.closeCameraWifi(with: options) { error in
       completion(error?.localizedDescription)
     }
   }
@@ -302,7 +311,8 @@ final class Insta360CameraController: NSObject, INSBluetoothManagerDelegate, INS
       completion("bluetooth_not_connected")
       return
     }
-    commandManager.resetCameraWifi(with: nil, channel: channel) { error in
+    let options = makeWifiRequestOptions()
+    commandManager.resetCameraWifi(with: options, channel: channel) { error in
       completion(error?.localizedDescription)
     }
   }
@@ -315,7 +325,8 @@ final class Insta360CameraController: NSObject, INSBluetoothManagerDelegate, INS
     let options = INSCameraOptions()
     options.wifiChannelList = INSCameraWifiChannelList(countryCode: countryCode)
     let types = [NSNumber(value: INSCameraOptionsType.wifiChannelList.rawValue)]
-    commandManager.setOptions(options, forTypes: types) { error, _ in
+    let requestOptions = makeWifiRequestOptions()
+    commandManager.setOptions(options, requestOptions: requestOptions, forTypes: types) { error, _ in
       completion(error?.localizedDescription)
     }
   }
@@ -326,7 +337,8 @@ final class Insta360CameraController: NSObject, INSBluetoothManagerDelegate, INS
       return
     }
     let types = [NSNumber(value: INSCameraOptionsType.wifiInfo.rawValue)]
-    commandManager.getOptionsWithTypes(types) { error, options, _ in
+    let requestOptions = makeWifiRequestOptions()
+    commandManager.getOptionsWithTypes(types, requestOptions: requestOptions) { error, options, _ in
       if let error {
         completion(.failure(Insta360SdkError(message: error.localizedDescription)))
         return
@@ -353,7 +365,8 @@ final class Insta360CameraController: NSObject, INSBluetoothManagerDelegate, INS
       return
     }
     let types = [NSNumber(value: INSCameraOptionsType.wifiChannelList.rawValue)]
-    commandManager.getOptionsWithTypes(types) { error, options, _ in
+    let requestOptions = makeWifiRequestOptions()
+    commandManager.getOptionsWithTypes(types, requestOptions: requestOptions) { error, options, _ in
       if let error {
         completion(.failure(Insta360SdkError(message: error.localizedDescription)))
         return
@@ -452,7 +465,9 @@ final class Insta360CameraController: NSObject, INSBluetoothManagerDelegate, INS
 
   func listMedia(storageType: UInt8, start: UInt, limit: UInt, completion: @escaping (Result<[String: Any], Insta360SdkError>) -> Void) {
     let options = INSGetFileListOptions()
-    options.type = INSStorageType(rawValue: storageType) ?? .camera
+    options.type = storageType == 0
+        ? .camera
+        : INSStorageType(rawValue: storageType)
     options.start = start
     options.limit = limit
 
@@ -666,6 +681,9 @@ final class Insta360CameraController: NSObject, INSBluetoothManagerDelegate, INS
         completion?("Preview player is not ready.")
         return
       }
+      self.mediaSession.flag = .live
+      self.mediaSession.automaticallyAdjustsRotation = true
+      self.mediaSession.previewStreamType = .main
       if !self.isPreviewPlugged {
         self.mediaSession.plug(previewPlayer)
         self.isPreviewPlugged = true
@@ -674,13 +692,16 @@ final class Insta360CameraController: NSObject, INSBluetoothManagerDelegate, INS
         completion?(nil)
         return
       }
-      self.mediaSession.startRunning { error in
-        self.isSessionRunning = (error == nil)
-        if let error {
-          completion?(error.localizedDescription)
-        } else {
-          previewPlayer.play(withSmoothBuffer: false)
-          completion?(nil)
+      self.setLiveViewEnabled(true) { _ in
+        self.startHeartbeats()
+        self.mediaSession.startRunning { error in
+          self.isSessionRunning = (error == nil)
+          if let error {
+            completion?(error.localizedDescription)
+          } else {
+            previewPlayer.play(withSmoothBuffer: true)
+            completion?(nil)
+          }
         }
       }
     }
@@ -693,11 +714,15 @@ final class Insta360CameraController: NSObject, INSBluetoothManagerDelegate, INS
         self.isPreviewPlugged = false
       }
       guard self.isSessionRunning else {
+        self.setLiveViewEnabled(false) { _ in }
+        self.stopHeartbeats()
         completion?(nil)
         return
       }
       self.mediaSession.stopRunning { error in
         self.isSessionRunning = false
+        self.setLiveViewEnabled(false) { _ in }
+        self.stopHeartbeats()
         if let error {
           completion?(error.localizedDescription)
         } else {
@@ -750,6 +775,7 @@ final class Insta360CameraController: NSObject, INSBluetoothManagerDelegate, INS
     if connectedBluetoothDevice?.identifierUUIDStringSafe == device.identifierUUIDStringSafe {
       connectedBluetoothDevice = nil
     }
+    stopHeartbeats()
     var payload: [String: Any] = [
       "type": "bluetooth_disconnected",
       "identifier": device.identifierUUIDStringSafe
@@ -811,11 +837,43 @@ final class Insta360CameraController: NSObject, INSBluetoothManagerDelegate, INS
     }
   }
 
-  private func bluetoothCommandManager() -> INSCameraBasicCommands? {
+  private func bluetoothCommandManager() -> INSAllBluetoothCommands? {
     guard let device = connectedBluetoothDevice else {
       return nil
     }
-    return bluetoothManager.command(by: device) as? INSCameraBasicCommands
+    return bluetoothManager.command(by: device)
+  }
+
+  private func setLiveViewEnabled(_ enabled: Bool, completion: @escaping (String?) -> Void) {
+    let options = INSCameraOptions()
+    options.appLiveviewStatus = enabled
+    let types = [NSNumber(value: INSCameraOptionsType.appLiveViewStatus.rawValue)]
+    INSCameraManager.socket().commandManager.setOptions(options, forTypes: types) { error, _ in
+      completion(error?.localizedDescription)
+    }
+  }
+
+  private func startHeartbeats() {
+    guard heartbeatTimer == nil else { return }
+    let timer = DispatchSource.makeTimerSource(queue: .main)
+    timer.schedule(deadline: .now(), repeating: 0.5)
+    timer.setEventHandler {
+      INSCameraManager.socket().commandManager.sendHeartbeats(with: nil)
+    }
+    timer.resume()
+    heartbeatTimer = timer
+  }
+
+  private func makeWifiRequestOptions() -> INSCameraRequestOptions {
+    let options = INSCameraRequestOptions()
+    options.timeout = 12
+    options.repeatCount = 1
+    return options
+  }
+
+  private func stopHeartbeats() {
+    heartbeatTimer?.cancel()
+    heartbeatTimer = nil
   }
 
   private func emitEvent(_ payload: [String: Any]) {
